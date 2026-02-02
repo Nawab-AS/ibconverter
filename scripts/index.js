@@ -1,43 +1,81 @@
-const date = document.getElementById("date")
+const { createApp, ref, watch, computed } = Vue
 
-// set date in footer
-d = new Date()
-date.innerHTML = d.getFullYear()
+const mode = ref('raw');
 
 // change right arrow to down if on mobile
-if (matchMedia('only screen and (max-width: 900px)').matches) {
-    icon.className = "fa-sharp fa-solid fa-arrow-down"
-}
+var arrowDir = "right"
+if (matchMedia('only screen and (max-width: 900px)').matches) arrowDir = "down";
 
-function num(input) {
-    let value = input.value;
 
-    if (value.startsWith('0') && !value.startsWith('0.') && value.length > 1) {
-        value = '0';
+// validate raw percent input
+const rawPercent = ref('');
+watch(rawPercent, (newVal, oldVal) => {
+    if (newVal === '') return;
+    let val = parseInt(newVal);
+    if (isNaN(val) || val < 0 || val > 100) {
+        rawPercent.value = oldVal;
     }
+});
 
-    if (value.match(/^100(\.0+)?$/)) {
-        input.value = '100';
-        return;
+// validate fraction inputs
+const fracNumerator = ref('');
+const fracDenominator = ref('');
+watch([fracNumerator, fracDenominator], ([newNum, newDen], [oldNum, oldDen]) => {
+    if (newNum === '' || newDen === '') return;
+    let numVal = parseFloat(newNum);
+    let denVal = parseFloat(newDen);
+    if (isNaN(numVal) || isNaN(denVal) || numVal < 0 || denVal <= 0) {
+        fracNumerator.value = oldNum;
+        fracDenominator.value = oldDen;
     }
+});
 
-    if ((!value.match(/^\d{1,2}(\.\d{0,2})?$/) && !(value.match(/^100$/) && value.length === 3) || parseFloat(value) > 100)) {
-        input.value = value.slice(0, -1);
+
+const subjectData = ref({});
+
+// re-fetch data when subject changes
+async function loadSubject(data) {
+    const [jsonURL, name] = data.split(' - ');
+    subjectData.value = await fetchSubjectData(jsonURL);
+    subjectData.value.name = name;
+};
+
+// Autoselect first subject
+const firstGroup = Object.keys(subjects)[0];
+const firstSubject = Object.keys(subjects[firstGroup])[0];
+loadSubject(subjects[firstGroup][firstSubject] + ' - ' + firstSubject);
+
+
+// live conversions
+const converted = computed(() => {
+    if (mode.value === 'raw' && rawPercent.value !== '') {
+        return convert(parseFloat(rawPercent.value), 100);
+    } else if (mode.value === 'frac' && fracNumerator.value !== '' && fracDenominator.value !== '') {
+        return convert(parseFloat(fracNumerator.value), parseFloat(fracDenominator.value));
     } else {
-        input.value = value;
+        return { level: null, percent: null };
     }
-}
+});
 
-function num2(input) {
-    let value = input.value;
-
-    if (value.startsWith('0') && !value.startsWith('0.')) {
-        value = value.replace(/^0+/, '0');
+// Mount vue
+const app = createApp({
+    data() {
+        return {
+            arrowDir,
+            mode,
+            rawPercent,
+            fracNumerator,
+            fracDenominator,
+            subjects,
+            loadSubject,
+            subjectData,
+            levelDescriptors,
+            converted,
+        }
     }
+});
 
-    if (!value.match(/^\d*\.?\d*$/)) {
-        input.value = value.slice(0, -1);
-    } else {
-        input.value = value;
-    }
-}
+app.config.compilerOptions = app.config.compilerOptions || {};
+app.config.compilerOptions.isCustomElement = (tag) => {return tag === 'amp-ad'};
+
+app.mount('body')

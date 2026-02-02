@@ -35,71 +35,53 @@
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5059773208710502"
         crossorigin="anonymous"></script>
     <script async custom-element="amp-ad" src="https://cdn.ampproject.org/v0/amp-ad-0.1.js"></script>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="./scripts/converter.js" defer></script>
+    <script src="./scripts/index.js" defer></script>
 </head>
 
-<body>
+<body v-cloak>
     <div id="bg"></div>
-    <!-- <header>
-        <p>HL Geo & Econ conversions have been updated!</p>
-    </header> -->
     <main>
         <h1>Ontario <span>IB</span> Grade Converter</h1>
         <div id="sub">
             <label for="subjects">Choose your Subject:</label>
-            <select name="subjects" id="subject" aria-label="Subjects">
-                <optgroup label="Group 1: Language & Literature">
-                    <option value="0" selected>HL English/TOK</option>
+            <!-- Dynamically generated subjects dropdown -->
+            <select name="subjects" id="subject" aria-label="Subjects" @change="loadSubject($event.target.value)">
+                <optgroup :label="groupName" :key="groupName" v-for="(subjects, groupName) in subjects">
+                    <option :value="`${subjectJson} - ${subjectName}`" v-for="(subjectJson, subjectName) in subjects">{{ subjectName }}</option>
                 </optgroup>
-                <optgroup label="Group 2: Language Acquisition">
-                    <option value="1">SL French</option>
-                    <option value="2">HL French</option>
-                    <option value="3">SL Spanish</option>
-                </optgroup>
-                <optgroup label="Group 3: Individuals & Societies">
-                    <option value="4">HL Economics</option>
-                    <option value="5">HL Geography</option>
-                    <option value="6">SL Business</option>
-                </optgroup>
-                <optgroup label="Group 4: Sciences">
-                    <option value="7">SL Chemistry</option>
-                    <option value="8">HL Chemistry</option>
-                    <option value="9">SL Biology</option>
-                    <option value="10">HL Biology</option>
-                    <option value="11">SL Physics</option>
-                </optgroup>
-                <optgroup label="Group 5: Mathematics">
-                    <option value="12">SL Math</option>
-                    <option value="13">HL Math</option>
-                </optgroup>
-                <!-- <optgroup label="Group 6: Arts">
-                </optgroup> -->
             </select>
         </div>
         <article>
             <form id="converter" autocomplete="off">
                 <div id="top">
                     <div id="in">
-                        <input type="text" id="mark" name="rawmark" aria-label="Raw Mark" oninput="num(this)" />
-                        <div id="mark2">
-                            <input type="text" id="mark21" name="fracraw" aria-label="Achieved Marks"
-                                oninput="num2(this)" />
-                            <input type="text" id="mark22" name="fracraw2" aria-label="Total Marks"
-                                oninput="num2(this)" />
+                        <input type="text" id="mark" name="rawmark" aria-label="Raw Mark" v-model="rawPercent" v-if="mode === 'raw'"/>
+                        <div id="mark2" v-if="mode === 'frac'">
+                            <input type="text" id="mark21" name="fracraw" aria-label="Achieved Marks" v-model="fracNumerator"/>
+                            <input type="text" id="mark22" name="fracraw2" aria-label="Total Marks" v-model="fracDenominator"/>
                         </div>
-                        <select name="modes" id="mode" aria-label="Mode Select">
+                        <select name="modes" id="mode" aria-label="Mode Select" v-model="mode">
                             <option value="raw">Raw Mark</option>
                             <option value="frac">Raw Fraction</option>
                         </select>
                     </div>
                     <div id="arrow">
-                        <i id="icon" class="fa-sharp fa-solid fa-arrow-right"></i>
+                        <i id="icon" :class="['fa-sharp', 'fa-solid', 'fa-arrow-'+arrowDir]"></i>
                     </div>
                     <div id="result">
-                        <h2 id="converted">Converted Mark</h2>
-                        <img src="./assets/images/default.avif" width="150px" id="joobi" alt="cookie muncher" />
+                        <div id="result">
+                        <h2 id="converted" v-if="converted.level == null">Converted Mark</h2>
+                        <h2 id="converted" v-else-if="converted.level == -1" style="color:#b32e31;">Invalid input</h2>
+                        <h2 id="converted" v-else><span :style="{ color: levelDescriptors[converted.level - 1][0] }">Level {{ converted.level }}:</span>&nbsp;{{ converted.percent }}%</h2>
+                        
+                        <img v-if="converted.level == null || converted.level == -1" src="./assets/images/default.avif" id="joobi" alt="cookie muncher" />
+                        <img v-else :src="levelDescriptors[converted.level - 1][1]" id="joobi" alt="cookie muncher" />
+                    </div>
                     </div>
                 </div>
-                <button type="submit">Convert!</button>
             </form>
         </article>
         <amp-ad width="100vw" height="320" type="adsense" data-ad-client="ca-pub-5059773208710502"
@@ -107,12 +89,18 @@
             <div overflow=""></div>
         </amp-ad>
         <section id="bottom">
-            <h2 id="subjecth2">></h2>
+            <h2 id="subjecth2">Conversion Ranges - {{ subjectData.name }}</h2>
             <div id="section-lvl">
+                <h3>Level</h3>
+                <p v-for="i in 7" :key="i" :style="{ color: levelDescriptors[i-1][0] }">Level {{ i }}</p>
             </div>
             <div id="section-raw">
+                <h3>Raw</h3>
+                <p v-for="bounds in subjectData.gradeBoundaries">{{ bounds.raw[0] }}-{{ bounds.raw[1] }}</p>
             </div>
             <div id="section-conv">
+                <h3>Converted</h3>
+                <p v-for="bounds in subjectData.gradeBoundaries">{{ bounds.converted[0] }}-{{ bounds.converted[1] }}</p>
             </div>
         </section>
     </main>
@@ -127,8 +115,6 @@
             Baccalaureate Organization.</p>
         <a href="https://anthonyhuang.net" target="_blank">Made by Anthony Huang (WOSS IB '25 Grad)</a>
     </footer>
-    <script src="./scripts/index.js"></script>
-    <script src="./scripts/converter.js"></script>
 </body>
 
 </html>
